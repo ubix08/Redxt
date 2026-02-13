@@ -1,33 +1,28 @@
 {
-  "name": "agent-browser-backend",
-  "version": "1.0.0",
-  "description": "Cloudflare Worker backend for AI agent browser automation",
-  "type": "module",
+  "name": "enhanced-browser-agent",
+  "version": "3.0.0",
+  "description": "Enhanced browser automation agent with multi-agent coordination and security guardrails",
+  "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "build": "esbuild src/index.ts --bundle --format=esm --outfile=dist/index.js --platform=neutral --conditions=worker",
-    "tail": "wrangler tail",
     "test": "vitest",
-    "type-check": "tsc --noEmit"
-  },
-  "keywords": [
-    "cloudflare-workers",
-    "durable-objects",
-    "ai-agent",
-    "browser-automation"
-  ],
-  "author": "",
-  "license": "MIT",
-  "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240512.0",
-    "@types/node": "^20.11.0",
-    "esbuild": "^0.20.0",
-    "typescript": "^5.3.3",
-    "vitest": "^1.2.0",
-    "wrangler": "^3.28.0"
+    "test:coverage": "vitest --coverage",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write src/**/*.ts"
   },
   "dependencies": {
-    "itty-router": "^5.0.0"
+    "itty-router": "^4.0.0",
+    "@anthropic-ai/sdk": "^0.20.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240000.0",
+    "typescript": "^5.3.3",
+    "wrangler": "^3.0.0",
+    "vitest": "^1.0.0",
+    "@vitest/coverage-v8": "^1.0.0",
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0"
   }
 }
