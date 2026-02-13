@@ -14,7 +14,7 @@ import type {
   ActionRecord,
   PlannerRecord,
 } from '../types';
-import { EnhancedCoordinator } from '../agents/coordinator';
+import { EnhancedCoordinator } from '../agent/coordinator';
 import { createDefaultToolRegistry } from '../tools/registry';
 import { EnhancedContentCache } from '../utils/cache';
 import { DEFAULT_RETRY_STRATEGY } from '../utils/error-handling';
