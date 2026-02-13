@@ -1,5 +1,6 @@
 /**
- * Enhanced Session Durable Object - Complete Implementation
+ * Enhanced Session Durable Object - CORRECTED VERSION
+ * Fixed: Removed all blocking loops and async issues
  */
 
 import type {
@@ -13,7 +14,7 @@ import type {
   ActionRecord,
   PlannerRecord,
 } from '../types';
-import { EnhancedCoordinator } from '../agent/coordinator';
+import { EnhancedCoordinator } from '../agents/coordinator';
 import { createDefaultToolRegistry } from '../tools/registry';
 import { EnhancedContentCache } from '../utils/cache';
 import { DEFAULT_RETRY_STRATEGY } from '../utils/error-handling';
@@ -43,52 +44,15 @@ export class SessionDurableObject {
   private toolRegistry = createDefaultToolRegistry();
   private contentCache: EnhancedContentCache | null = null;
   private actionQueue: BrowserAction[] = [];
-  private executionPromise: Promise<void> | null = null;
   private eventListeners = new Set<(event: EventData) => void>();
   
-  constructor(state: DurableObjectState, env: any) {
+  constructor(state: DurableObjectState) {
     this.state = state;
-    // Don't block on constructor - lazy load state when needed
   }
   
-  private async ensureInitialized(env?: any): Promise<void> {
-    // Skip if already initialized or if this is a new session (will be created by /init)
-    if (this.sessionState !== null) {
-      return;
-    }
-    
-    try {
-      const stored = await this.state.storage.get<any>('session');
-      if (stored) {
-        this.sessionState = {
-          ...stored,
-          contentCache: new Map(Object.entries(stored.contentCache || {})),
-        };
-        
-        if (this.sessionState.config?.cacheStrategy) {
-          this.contentCache = new EnhancedContentCache(this.sessionState.config.cacheStrategy);
-        }
-        
-        if (env?.ANTHROPIC_API_KEY && !this.coordinator && this.sessionState) {
-          this.coordinator = new EnhancedCoordinator(
-            env.ANTHROPIC_API_KEY,
-            this.sessionState,
-            this.toolRegistry
-          );
-        }
-      }
-    } catch (error) {
-      console.error('Error loading session state:', error);
-      // Don't throw - let the handler deal with missing state
-    }
-  }
-  
-  async fetch(request: Request, env?: any): Promise<Response> {
+  async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
-    
-    // Lazy load session state from storage if needed
-    await this.ensureInitialized(env);
     
     try {
       switch (path) {
@@ -108,7 +72,11 @@ export class SessionDurableObject {
         default: return new Response('Not Found', { status: 404 });
       }
     } catch (error) {
-      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), { status: 500 });
+      console.error('Error handling request:', error);
+      return new Response(
+        JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
     }
   }
   
@@ -159,12 +127,18 @@ export class SessionDurableObject {
     this.contentCache = new EnhancedContentCache(config.cacheStrategy);
     await this.persistState();
     
-    return new Response(JSON.stringify({ sessionId }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(
+      JSON.stringify({ sessionId }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
   }
   
   private async handleExecute(request: Request): Promise<Response> {
     if (!this.sessionState) {
-      return new Response(JSON.stringify({ error: 'Session not initialized' }), { status: 400 });
+      return new Response(
+        JSON.stringify({ error: 'Session not initialized' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
     
     const body = await request.json() as { task: string; vision?: boolean; apiKey: string };
@@ -186,8 +160,11 @@ export class SessionDurableObject {
       this.sessionState.config.enableVision = body.vision;
     }
     
+    task.status = 'running';
+    task.startedAt = Date.now();
+    this.sessionState.executionState = 'planning';
+    
     await this.persistState();
-    this.executionPromise = this.executeTask();
     
     this.emitEvent({
       type: 'task_start',
@@ -197,154 +174,128 @@ export class SessionDurableObject {
       timestamp: Date.now(),
     });
     
-    return new Response(JSON.stringify({ success: true, taskId: task.id }), { headers: { 'Content-Type': 'application/json' } });
+    // Start planning immediately (non-blocking)
+    this.planNextStep().catch(error => {
+      console.error('Planning error:', error);
+      if (this.sessionState) {
+        this.sessionState.executionState = 'error';
+        const currentTask = this.sessionState.tasks[this.sessionState.currentTaskIndex];
+        if (currentTask) {
+          currentTask.status = 'failed';
+          currentTask.error = error.message;
+        }
+      }
+    });
+    
+    return new Response(
+      JSON.stringify({ success: true, taskId: task.id }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
   }
   
-  private async executeTask(): Promise<void> {
+  private async planNextStep(): Promise<void> {
     if (!this.sessionState || !this.coordinator) return;
     
     const currentTask = this.sessionState.tasks[this.sessionState.currentTaskIndex];
     if (!currentTask) return;
     
-    currentTask.status = 'running';
-    currentTask.startedAt = Date.now();
-    this.sessionState.executionState = 'planning';
+    if (this.sessionState.executionState === 'paused' || 
+        this.sessionState.executionState === 'completed') {
+      return;
+    }
     
-    try {
-      while (
-        this.sessionState.stepCount < this.sessionState.config.maxSteps &&
-        this.sessionState.executionState !== 'paused' &&
-        this.sessionState.executionState !== 'completed'
-      ) {
-        const stepStartTime = Date.now();
-        this.sessionState.stepCount++;
-        this.sessionState.metrics.totalSteps++;
-        
-        const cacheKey = `${this.sessionState.browserState.url}-dom`;
-        const cachedDOM = this.contentCache?.get(cacheKey, 'dom');
-        if (cachedDOM) {
-          this.sessionState.browserState.dom = cachedDOM;
-          this.sessionState.cacheStats.hits++;
-        } else {
-          this.sessionState.cacheStats.misses++;
-        }
-        
-        if (this.contentCache) {
-          this.sessionState.cacheStats = this.contentCache.getStats();
-          this.sessionState.metrics.cacheHitRate = this.sessionState.cacheStats.hitRate;
-        }
-        
-        this.sessionState.executionState = 'planning';
-        const plannerOutput = await this.coordinator.runPlanner({
-          taskDescription: currentTask.description,
-          currentState: this.sessionState.browserState,
-          actionHistory: this.sessionState.actionHistory,
-          currentPlan: this.sessionState.currentPlan,
-          stepCount: this.sessionState.stepCount,
-          maxSteps: this.sessionState.config.maxSteps,
-        });
-        
-        const plannerRecord: PlannerRecord = {
-          input: {
-            taskDescription: currentTask.description,
-            currentState: this.sessionState.browserState,
-            actionHistory: this.sessionState.actionHistory,
-            currentPlan: this.sessionState.currentPlan,
-            stepCount: this.sessionState.stepCount,
-            maxSteps: this.sessionState.config.maxSteps,
-          },
-          output: plannerOutput,
-          timestamp: Date.now(),
-          duration: 0,
-        };
-        this.sessionState.plannerHistory.push(plannerRecord);
-        
-        if (plannerOutput.plan) {
-          this.sessionState.currentPlan = plannerOutput.plan;
-        }
-        
-        this.emitEvent({
-          type: 'plan_generated',
-          actor: 'planner',
-          state: 'Plan generated',
-          data: { reasoning: plannerOutput.reasoning, confidence: plannerOutput.confidence },
-          timestamp: Date.now(),
-        });
-        
-        if (plannerOutput.taskComplete) {
-          currentTask.status = 'completed';
-          currentTask.completedAt = Date.now();
-          currentTask.result = plannerOutput.result;
-          this.sessionState.executionState = 'completed';
-          
-          this.emitEvent({
-            type: 'task_complete',
-            actor: 'system',
-            state: 'Task completed',
-            data: { result: plannerOutput.result },
-            timestamp: Date.now(),
-          });
-          
-          break;
-        }
-        
-        this.actionQueue.push(plannerOutput.nextAction);
-        this.sessionState.executionState = 'waiting_for_browser';
-        await this.waitForActionResult();
-        
-        const stepDuration = Date.now() - stepStartTime;
-        this.sessionState.metrics.averageStepTime = 
-          (this.sessionState.metrics.averageStepTime * (this.sessionState.stepCount - 1) + stepDuration) / 
-          this.sessionState.stepCount;
-        
-        await this.persistState();
-      }
-      
-      if (this.sessionState.stepCount >= this.sessionState.config.maxSteps) {
-        currentTask.status = 'failed';
-        currentTask.error = 'Maximum steps reached';
-        this.sessionState.executionState = 'error';
-        
-        this.emitEvent({
-          type: 'task_error',
-          actor: 'system',
-          state: 'Max steps reached',
-          timestamp: Date.now(),
-        });
-      }
-      
-    } catch (error) {
+    if (this.sessionState.stepCount >= this.sessionState.config.maxSteps) {
       currentTask.status = 'failed';
-      currentTask.error = error instanceof Error ? error.message : 'Unknown error';
+      currentTask.error = 'Maximum steps reached';
       this.sessionState.executionState = 'error';
+      await this.persistState();
+      return;
+    }
+    
+    this.sessionState.stepCount++;
+    this.sessionState.metrics.totalSteps++;
+    
+    // Check cache
+    const cacheKey = `${this.sessionState.browserState.url}-dom`;
+    const cachedDOM = this.contentCache?.get(cacheKey, 'dom');
+    if (cachedDOM) {
+      this.sessionState.browserState.dom = cachedDOM;
+      this.sessionState.cacheStats.hits++;
+    } else {
+      this.sessionState.cacheStats.misses++;
+    }
+    
+    if (this.contentCache) {
+      this.sessionState.cacheStats = this.contentCache.getStats();
+      this.sessionState.metrics.cacheHitRate = this.sessionState.cacheStats.hitRate;
+    }
+    
+    // Run planner
+    this.sessionState.executionState = 'planning';
+    const plannerOutput = await this.coordinator.runPlanner({
+      taskDescription: currentTask.description,
+      currentState: this.sessionState.browserState,
+      actionHistory: this.sessionState.actionHistory,
+      currentPlan: this.sessionState.currentPlan,
+      stepCount: this.sessionState.stepCount,
+      maxSteps: this.sessionState.config.maxSteps,
+    });
+    
+    const plannerRecord: PlannerRecord = {
+      input: {
+        taskDescription: currentTask.description,
+        currentState: this.sessionState.browserState,
+        actionHistory: this.sessionState.actionHistory,
+        currentPlan: this.sessionState.currentPlan,
+        stepCount: this.sessionState.stepCount,
+        maxSteps: this.sessionState.config.maxSteps,
+      },
+      output: plannerOutput,
+      timestamp: Date.now(),
+      duration: 0,
+    };
+    this.sessionState.plannerHistory.push(plannerRecord);
+    
+    if (plannerOutput.plan) {
+      this.sessionState.currentPlan = plannerOutput.plan;
+    }
+    
+    this.emitEvent({
+      type: 'plan_generated',
+      actor: 'planner',
+      state: 'Plan generated',
+      data: { reasoning: plannerOutput.reasoning, confidence: plannerOutput.confidence },
+      timestamp: Date.now(),
+    });
+    
+    if (plannerOutput.taskComplete) {
+      currentTask.status = 'completed';
+      currentTask.completedAt = Date.now();
+      currentTask.result = plannerOutput.result;
+      this.sessionState.executionState = 'completed';
       
       this.emitEvent({
-        type: 'task_error',
+        type: 'task_complete',
         actor: 'system',
-        state: 'Error occurred',
-        data: { error: currentTask.error },
+        state: 'Task completed',
+        data: { result: plannerOutput.result },
         timestamp: Date.now(),
-        severity: 'error',
       });
-    } finally {
-      await this.persistState();
+    } else {
+      // Queue action for browser
+      this.actionQueue.push(plannerOutput.nextAction);
+      this.sessionState.executionState = 'waiting_for_browser';
     }
-  }
-  
-  private waitForActionResult(): Promise<void> {
-    return new Promise((resolve) => {
-      const checkInterval = setInterval(() => {
-        if (this.sessionState?.executionState !== 'waiting_for_browser') {
-          clearInterval(checkInterval);
-          resolve();
-        }
-      }, 100);
-    });
+    
+    await this.persistState();
   }
   
   private async handleFollowUp(request: Request): Promise<Response> {
     if (!this.sessionState) {
-      return new Response(JSON.stringify({ error: 'Session not initialized' }), { status: 400 });
+      return new Response(
+        JSON.stringify({ error: 'Session not initialized' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
     
     const body = await request.json() as { task: string };
@@ -359,29 +310,44 @@ export class SessionDurableObject {
     this.sessionState.tasks.push(task);
     await this.persistState();
     
-    return new Response(JSON.stringify({ success: true, taskId: task.id }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(
+      JSON.stringify({ success: true, taskId: task.id }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
   }
   
   private async handleNextAction(request: Request): Promise<Response> {
     if (!this.sessionState) {
-      return new Response(JSON.stringify({ error: 'Session not initialized' }), { status: 400 });
+      return new Response(
+        JSON.stringify({ error: 'Session not initialized' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
     
     const action = this.actionQueue.shift();
     
     if (!action) {
-      return new Response(JSON.stringify({
-        waiting: true,
-        taskComplete: this.sessionState.executionState === 'completed',
-      }), { headers: { 'Content-Type': 'application/json' } });
+      return new Response(
+        JSON.stringify({
+          waiting: true,
+          taskComplete: this.sessionState.executionState === 'completed',
+        }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
     }
     
-    return new Response(JSON.stringify({ action, waiting: false, taskComplete: false }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(
+      JSON.stringify({ action, waiting: false, taskComplete: false }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
   }
   
   private async handleActionResult(request: Request): Promise<Response> {
     if (!this.sessionState) {
-      return new Response(JSON.stringify({ error: 'Session not initialized' }), { status: 400 });
+      return new Response(
+        JSON.stringify({ error: 'Session not initialized' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
     
     const body = await request.json() as {
@@ -416,6 +382,11 @@ export class SessionDurableObject {
     
     if (this.sessionState.executionState === 'waiting_for_browser') {
       this.sessionState.executionState = 'executing';
+      
+      // Continue planning next step (non-blocking)
+      this.planNextStep().catch(error => {
+        console.error('Planning error:', error);
+      });
     }
     
     this.emitEvent({
@@ -428,12 +399,18 @@ export class SessionDurableObject {
     });
     
     await this.persistState();
-    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(
+      JSON.stringify({ success: true }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
   }
   
   private async handleUpdateState(request: Request): Promise<Response> {
     if (!this.sessionState) {
-      return new Response(JSON.stringify({ error: 'Session not initialized' }), { status: 400 });
+      return new Response(
+        JSON.stringify({ error: 'Session not initialized' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
     
     const body = await request.json() as BrowserState;
@@ -463,12 +440,18 @@ export class SessionDurableObject {
       timestamp: Date.now(),
     });
     
-    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(
+      JSON.stringify({ success: true }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
   }
   
   private async handlePause(): Promise<Response> {
     if (!this.sessionState) {
-      return new Response(JSON.stringify({ error: 'Session not initialized' }), { status: 400 });
+      return new Response(
+        JSON.stringify({ error: 'Session not initialized' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
     
     this.sessionState.executionState = 'paused';
@@ -477,13 +460,25 @@ export class SessionDurableObject {
     this.sessionState.updatedAt = Date.now();
     await this.persistState();
     
-    this.emitEvent({ type: 'task_pause', actor: 'system', state: 'Task paused', timestamp: Date.now() });
-    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+    this.emitEvent({
+      type: 'task_pause',
+      actor: 'system',
+      state: 'Task paused',
+      timestamp: Date.now(),
+    });
+    
+    return new Response(
+      JSON.stringify({ success: true }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
   }
   
   private async handleResume(): Promise<Response> {
     if (!this.sessionState) {
-      return new Response(JSON.stringify({ error: 'Session not initialized' }), { status: 400 });
+      return new Response(
+        JSON.stringify({ error: 'Session not initialized' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
     
     if (this.sessionState.executionState === 'paused') {
@@ -493,19 +488,31 @@ export class SessionDurableObject {
       this.sessionState.updatedAt = Date.now();
       await this.persistState();
       
-      if (!this.executionPromise) {
-        this.executionPromise = this.executeTask();
-      }
+      // Resume planning (non-blocking)
+      this.planNextStep().catch(error => {
+        console.error('Planning error:', error);
+      });
       
-      this.emitEvent({ type: 'task_resume', actor: 'system', state: 'Task resumed', timestamp: Date.now() });
+      this.emitEvent({
+        type: 'task_resume',
+        actor: 'system',
+        state: 'Task resumed',
+        timestamp: Date.now(),
+      });
     }
     
-    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(
+      JSON.stringify({ success: true }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
   }
   
   private async handleCancel(): Promise<Response> {
     if (!this.sessionState) {
-      return new Response(JSON.stringify({ error: 'Session not initialized' }), { status: 400 });
+      return new Response(
+        JSON.stringify({ error: 'Session not initialized' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
     
     this.sessionState.executionState = 'completed';
@@ -518,31 +525,49 @@ export class SessionDurableObject {
     this.actionQueue = [];
     await this.persistState();
     
-    this.emitEvent({ type: 'task_cancel', actor: 'system', state: 'Task cancelled', timestamp: Date.now() });
-    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+    this.emitEvent({
+      type: 'task_cancel',
+      actor: 'system',
+      state: 'Task cancelled',
+      timestamp: Date.now(),
+    });
+    
+    return new Response(
+      JSON.stringify({ success: true }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
   }
   
   private async handleGetHistory(): Promise<Response> {
     if (!this.sessionState) {
-      return new Response(JSON.stringify({ error: 'Session not initialized' }), { status: 400 });
+      return new Response(
+        JSON.stringify({ error: 'Session not initialized' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
     
-    return new Response(JSON.stringify({
-      sessionId: this.sessionState.sessionId,
-      tasks: this.sessionState.tasks,
-      currentTaskIndex: this.sessionState.currentTaskIndex,
-      executionState: this.sessionState.executionState,
-      actionHistory: this.sessionState.actionHistory,
-      plannerHistory: this.sessionState.plannerHistory,
-      securityEvents: this.sessionState.securityEvents,
-      metrics: this.sessionState.metrics,
-      stepCount: this.sessionState.stepCount,
-    }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(
+      JSON.stringify({
+        sessionId: this.sessionState.sessionId,
+        tasks: this.sessionState.tasks,
+        currentTaskIndex: this.sessionState.currentTaskIndex,
+        executionState: this.sessionState.executionState,
+        actionHistory: this.sessionState.actionHistory,
+        plannerHistory: this.sessionState.plannerHistory,
+        securityEvents: this.sessionState.securityEvents,
+        metrics: this.sessionState.metrics,
+        stepCount: this.sessionState.stepCount,
+      }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
   }
   
   private async handleReplay(request: Request): Promise<Response> {
     if (!this.sessionState || !this.sessionState.config.enableReplay) {
-      return new Response(JSON.stringify({ error: 'Replay not enabled' }), { status: 400 });
+      return new Response(
+        JSON.stringify({ error: 'Replay not enabled' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
     
     const replaySession: ReplaySession = {
@@ -555,26 +580,44 @@ export class SessionDurableObject {
     };
     
     await this.state.storage.put(`replay-${this.sessionState.sessionId}`, replaySession);
-    return new Response(JSON.stringify({ success: true, replayId: this.sessionState.sessionId }), { headers: { 'Content-Type': 'application/json' } });
+    
+    return new Response(
+      JSON.stringify({ success: true, replayId: this.sessionState.sessionId }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
   }
   
   private async handleExtract(request: Request): Promise<Response> {
     if (!this.sessionState || !this.coordinator) {
-      return new Response(JSON.stringify({ error: 'Session not initialized' }), { status: 400 });
+      return new Response(
+        JSON.stringify({ error: 'Session not initialized' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
     
-    const body = await request.json() as { fields: string[]; content: string; extractionPrompt?: string };
+    const body = await request.json() as {
+      fields: string[];
+      content: string;
+      extractionPrompt?: string;
+    };
+    
     const extractOutput = await this.coordinator.runExtractor(body);
     
     if (extractOutput.error) {
-      return new Response(JSON.stringify({ error: extractOutput.error }), { status: 500 });
+      return new Response(
+        JSON.stringify({ error: extractOutput.error }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
     }
     
-    return new Response(JSON.stringify({
-      success: true,
-      data: extractOutput.result?.extractedData,
-      confidence: extractOutput.result?.confidence,
-    }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: extractOutput.result?.extractedData,
+        confidence: extractOutput.result?.confidence,
+      }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
   }
   
   private async handleEventStream(request: Request): Promise<Response> {
