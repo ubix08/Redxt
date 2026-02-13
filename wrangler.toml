@@ -1,46 +1,20 @@
-# Cloudflare Workers configuration
-name = "agent-browser-backend"
+name = "agent-browser"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
-account_id = "" # Add your Cloudflare account ID here
 
-# Workers AI binding (optional - if you want to use Cloudflare AI models)
-# [ai]
-# binding = "AI"
+[assets]
+directory = "public"
+
 
 # Durable Objects
 [[durable_objects.bindings]]
 name = "SESSIONS"
 class_name = "SessionDurableObject"
-script_name = "agent-browser-backend"
 
-# Migrations for Durable Objects
 [[migrations]]
 tag = "v1"
-new_classes = ["SessionDurableObject"]
+new_sqlite_classes = ["SessionDurableObject"]
 
-# Environment variables (optional - can also be set via dashboard)
-# [vars]
-# OPENAI_API_KEY = ""  # Don't put actual keys here - use secrets instead
-
-# Secrets (set these via: wrangler secret put OPENAI_API_KEY)
-# - OPENAI_API_KEY
-# - ANTHROPIC_API_KEY
-
-# Route configuration (optional - for custom domains)
-# routes = [
-#   { pattern = "agent.example.com/*", zone_name = "example.com" }
-# ]
-
-# Limits (free tier)
-[limits]
-cpu_ms = 10000  # 10 seconds CPU time per request
-
-# Build configuration
-[build]
-command = "npm run build"
-
-# Development configuration
-[dev]
-port = 8787
-local_protocol = "http"
+# Increased CPU limit for complex agent operations (5 minutes)
+[durable_objects.limits]
+cpu_ms = 300000
