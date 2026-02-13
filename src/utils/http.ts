@@ -1,6 +1,6 @@
 /**
  * HTTP Utilities
- * Helper functions for handling HTTP requests and responses
+ * CORS handling and error responses
  */
 
 export const corsHeaders = {
@@ -18,15 +18,14 @@ export function handleCors(): Response {
 }
 
 export function handleError(error: unknown): Response {
-  console.error('Error:', error);
-
   const message = error instanceof Error ? error.message : 'Unknown error';
-  const stack = error instanceof Error ? error.stack : undefined;
-
+  
+  console.error('Request error:', error);
+  
   return new Response(
-    JSON.stringify({
+    JSON.stringify({ 
       error: message,
-      ...(stack && { stack }),
+      timestamp: Date.now(),
     }),
     {
       status: 500,
@@ -38,19 +37,9 @@ export function handleError(error: unknown): Response {
   );
 }
 
-export function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'Content-Type': 'application/json',
-      ...corsHeaders,
-    },
-  });
-}
-
-export function errorResponse(message: string, status = 400): Response {
+export function jsonResponse(data: any, status: number = 200): Response {
   return new Response(
-    JSON.stringify({ error: message }),
+    JSON.stringify(data),
     {
       status,
       headers: {
@@ -61,10 +50,6 @@ export function errorResponse(message: string, status = 400): Response {
   );
 }
 
-export async function parseJsonBody<T>(request: Request): Promise<T> {
-  try {
-    return await request.json() as T;
-  } catch (error) {
-    throw new Error('Invalid JSON body');
-  }
+export function errorResponse(message: string, status: number = 400): Response {
+  return jsonResponse({ error: message }, status);
 }
