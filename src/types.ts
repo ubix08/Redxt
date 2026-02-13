@@ -1,285 +1,28 @@
 /**
- * Enhanced Type Definitions - Complete Implementation
+ * Enhanced Browser Agent - Type Definitions
+ * Complete type system for the enhanced implementation
  */
 
 export interface Env {
   SESSIONS: DurableObjectNamespace;
-  OPENAI_API_KEY?: string;
-  ANTHROPIC_API_KEY?: string;
+  ANTHROPIC_API_KEY: string;
+  ENVIRONMENT?: string;
+  MAX_STEPS?: string;
+  ENABLE_ANALYTICS?: string;
 }
 
-export interface BrowserState {
-  url: string;
-  title: string;
-  screenshot?: string;
-  domTree?: DOMElement[];
-  viewport?: {
-    width: number;
-    height: number;
-  };
-  timestamp: number;
-  tabId?: number;
-  tabs?: TabInfo[];
-}
+// ============================================================================
+// CORE TYPES
+// ============================================================================
 
-export interface TabInfo {
-  id: number;
-  url: string;
-  title: string;
-  active: boolean;
-}
-
-export interface DOMElement {
-  id: string;
-  tagName: string;
-  attributes: Record<string, string>;
-  textContent?: string;
-  children?: string[];
-  xpath?: string;
-  isInteractive?: boolean;
-  boundingBox?: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
-}
-
-export enum ActionType {
-  // Navigation
-  NAVIGATE = 'navigate',
-  GO_BACK = 'go_back',
-  
-  // Interaction
-  CLICK = 'click',
-  TYPE = 'type',
-  HOVER = 'hover',
-  SELECT = 'select',
-  
-  // Scrolling
-  SCROLL = 'scroll',
-  SCROLL_TO_TOP = 'scroll_to_top',
-  SCROLL_TO_BOTTOM = 'scroll_to_bottom',
-  SCROLL_TO_TEXT = 'scroll_to_text',
-  SCROLL_TO_PERCENT = 'scroll_to_percent',
-  
-  // Tab Management
-  OPEN_TAB = 'open_tab',
-  CLOSE_TAB = 'close_tab',
-  SWITCH_TAB = 'switch_tab',
-  
-  // Page Control
-  WAIT = 'wait',
-  SCREENSHOT = 'screenshot',
-  
-  // Data Operations
-  EXTRACT = 'extract',
-  CACHE_CONTENT = 'cache_content',
-  
-  // Keyboard
-  PRESS_KEY = 'press_key',
-  SEND_KEYS = 'send_keys',
-  
-  // Dropdown
-  GET_DROPDOWN_OPTIONS = 'get_dropdown_options',
-  
-  // Shortcuts
-  SEARCH_GOOGLE = 'search_google',
-  
-  // Pagination
-  NEXT_PAGE = 'next_page',
-  PREVIOUS_PAGE = 'previous_page',
-  
-  // Completion
-  COMPLETE = 'complete',
-}
-
-export interface BaseAction {
-  id: string;
-  type: ActionType;
-  reasoning: string;
-  timestamp: number;
-}
-
-export interface NavigateAction extends BaseAction {
-  type: ActionType.NAVIGATE;
-  url: string;
-}
-
-export interface GoBackAction extends BaseAction {
-  type: ActionType.GO_BACK;
-}
-
-export interface ClickAction extends BaseAction {
-  type: ActionType.CLICK;
-  selector: string;
-  elementId?: string;
-}
-
-export interface TypeAction extends BaseAction {
-  type: ActionType.TYPE;
-  selector: string;
-  text: string;
-  elementId?: string;
-  clearFirst?: boolean;
-}
-
-export interface HoverAction extends BaseAction {
-  type: ActionType.HOVER;
-  selector: string;
-  elementId?: string;
-}
-
-export interface SelectAction extends BaseAction {
-  type: ActionType.SELECT;
-  selector: string;
-  value: string;
-  elementId?: string;
-}
-
-export interface ScrollAction extends BaseAction {
-  type: ActionType.SCROLL;
-  direction: 'up' | 'down' | 'left' | 'right';
-  amount?: number;
-}
-
-export interface ScrollToTopAction extends BaseAction {
-  type: ActionType.SCROLL_TO_TOP;
-}
-
-export interface ScrollToBottomAction extends BaseAction {
-  type: ActionType.SCROLL_TO_BOTTOM;
-}
-
-export interface ScrollToTextAction extends BaseAction {
-  type: ActionType.SCROLL_TO_TEXT;
-  text: string;
-}
-
-export interface ScrollToPercentAction extends BaseAction {
-  type: ActionType.SCROLL_TO_PERCENT;
-  percent: number;
-}
-
-export interface OpenTabAction extends BaseAction {
-  type: ActionType.OPEN_TAB;
-  url: string;
-}
-
-export interface CloseTabAction extends BaseAction {
-  type: ActionType.CLOSE_TAB;
-  tabId?: number;
-}
-
-export interface SwitchTabAction extends BaseAction {
-  type: ActionType.SWITCH_TAB;
-  tabId: number;
-}
-
-export interface WaitAction extends BaseAction {
-  type: ActionType.WAIT;
-  duration: number;
-  reason?: string;
-}
-
-export interface ScreenshotAction extends BaseAction {
-  type: ActionType.SCREENSHOT;
-}
-
-export interface ExtractAction extends BaseAction {
-  type: ActionType.EXTRACT;
-  selector?: string;
-  fields: string[];
-  extractionPrompt?: string;
-}
-
-export interface CacheContentAction extends BaseAction {
-  type: ActionType.CACHE_CONTENT;
-  selector?: string;
-  cacheKey: string;
-}
-
-export interface PressKeyAction extends BaseAction {
-  type: ActionType.PRESS_KEY;
-  key: string;
-  modifiers?: string[];
-}
-
-export interface SendKeysAction extends BaseAction {
-  type: ActionType.SEND_KEYS;
-  keys: string;
-}
-
-export interface GetDropdownOptionsAction extends BaseAction {
-  type: ActionType.GET_DROPDOWN_OPTIONS;
-  selector: string;
-}
-
-export interface SearchGoogleAction extends BaseAction {
-  type: ActionType.SEARCH_GOOGLE;
-  query: string;
-}
-
-export interface NextPageAction extends BaseAction {
-  type: ActionType.NEXT_PAGE;
-}
-
-export interface PreviousPageAction extends BaseAction {
-  type: ActionType.PREVIOUS_PAGE;
-}
-
-export interface CompleteAction extends BaseAction {
-  type: ActionType.COMPLETE;
-  result: string;
-  success: boolean;
-}
-
-export type Action =
-  | NavigateAction
-  | GoBackAction
-  | ClickAction
-  | TypeAction
-  | HoverAction
-  | SelectAction
-  | ScrollAction
-  | ScrollToTopAction
-  | ScrollToBottomAction
-  | ScrollToTextAction
-  | ScrollToPercentAction
-  | OpenTabAction
-  | CloseTabAction
-  | SwitchTabAction
-  | WaitAction
-  | ScreenshotAction
-  | ExtractAction
-  | CacheContentAction
-  | PressKeyAction
-  | SendKeysAction
-  | GetDropdownOptionsAction
-  | SearchGoogleAction
-  | NextPageAction
-  | PreviousPageAction
-  | CompleteAction;
-
-export interface ActionResult {
-  actionId: string;
-  success: boolean;
-  result?: unknown;
-  error?: string;
-  screenshot?: string;
-  domState?: unknown;
-  timestamp: number;
-  extractedData?: unknown;
-}
-
-export interface Task {
-  id: string;
-  description: string;
-  startUrl?: string;
-  status: TaskStatus;
-  createdAt: number;
-  updatedAt: number;
-  completedAt?: number;
+export enum ExecutionState {
+  IDLE = 'idle',
+  PLANNING = 'planning',
+  EXECUTING = 'executing',
+  WAITING_FOR_BROWSER = 'waiting_for_browser',
+  PAUSED = 'paused',
+  COMPLETED = 'completed',
+  ERROR = 'error',
 }
 
 export enum TaskStatus {
@@ -291,150 +34,487 @@ export enum TaskStatus {
   CANCELLED = 'cancelled',
 }
 
-export enum ExecutionState {
-  IDLE = 'idle',
-  PLANNING = 'planning',
-  EXECUTING = 'executing',
-  WAITING_FOR_RESULT = 'waiting_for_result',
-  PAUSED = 'paused',
-  COMPLETED = 'completed',
-  FAILED = 'failed',
+export enum EventType {
+  TASK_START = 'task_start',
+  TASK_PAUSE = 'task_pause',
+  TASK_RESUME = 'task_resume',
+  TASK_CANCEL = 'task_cancel',
+  TASK_COMPLETE = 'task_complete',
+  TASK_ERROR = 'task_error',
+  PLAN_GENERATED = 'plan_generated',
+  ACTION_EXECUTED = 'action_executed',
+  STATE_UPDATE = 'state_update',
+  SECURITY_ALERT = 'security_alert',
+  PERFORMANCE_METRIC = 'performance_metric',
 }
 
-export enum AgentType {
-  PLANNER = 'planner',
-  NAVIGATOR = 'navigator',
-  EXTRACTOR = 'extractor',
+// ============================================================================
+// SECURITY & GUARDRAILS
+// ============================================================================
+
+export enum ThreatType {
+  TASK_OVERRIDE = 'task_override',
+  PROMPT_INJECTION = 'prompt_injection',
+  SENSITIVE_DATA = 'sensitive_data',
+  DANGEROUS_ACTION = 'dangerous_action',
+  SYSTEM_REFERENCE = 'system_reference',
+  CREDENTIAL_LEAK = 'credential_leak',
 }
 
-export interface AgentOutput {
-  agent: AgentType;
-  result: unknown;
+export interface SecurityPattern {
+  pattern: RegExp;
+  type: ThreatType;
+  description: string;
+  replacement?: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+}
+
+export interface SanitizationResult {
+  sanitized: string;
+  threats: ThreatType[];
+  modified: boolean;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+}
+
+export interface SecurityEvent {
+  type: ThreatType;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  content: string;
+  sessionId: string;
+  step: number;
+  timestamp: number;
+  blocked: boolean;
+}
+
+// ============================================================================
+// ERROR HANDLING
+// ============================================================================
+
+export enum ErrorCategory {
+  RECOVERABLE = 'recoverable',
+  USER_INPUT_REQUIRED = 'user_input_required',
+  FATAL = 'fatal',
+  TIMEOUT = 'timeout',
+  RATE_LIMIT = 'rate_limit',
+  NETWORK = 'network',
+}
+
+export interface ErrorContext {
+  category: ErrorCategory;
+  message: string;
+  originalError: Error;
+  step: number;
+  action?: BrowserAction;
+  retryable: boolean;
+  userActionRequired?: string;
+  suggestedAction?: string;
+}
+
+export interface RetryStrategy {
+  maxRetries: number;
+  backoffMs: number;
+  backoffMultiplier: number;
+  maxBackoffMs: number;
+  retryableCategories: ErrorCategory[];
+}
+
+// ============================================================================
+// TOOLS SYSTEM
+// ============================================================================
+
+export interface ToolParameter {
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array';
+  description: string;
+  required: boolean;
+  enum?: string[];
+  default?: any;
+  validation?: (value: any) => boolean;
+}
+
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters: Record<string, ToolParameter>;
+  category: 'navigation' | 'interaction' | 'extraction' | 'analysis' | 'utility';
+  requiresVision?: boolean;
+  riskLevel: 'low' | 'medium' | 'high';
+}
+
+export interface ToolExecutionContext {
+  sessionId: string;
+  browserState: BrowserState;
+  currentStep: number;
+  history: ActionRecord[];
+  config: SessionConfig;
+}
+
+export interface ToolExecutionResult {
+  success: boolean;
+  data?: any;
+  error?: string;
+  executionTime: number;
+  browserStateChanged: boolean;
+  screenshot?: string;
+}
+
+export interface BrowserTool {
+  definition: ToolDefinition;
+  validate: (params: any) => ValidationResult;
+  execute: (params: any, context: ToolExecutionContext) => Promise<ToolExecutionResult>;
+  canExecute?: (context: ToolExecutionContext) => boolean;
+}
+
+// ============================================================================
+// BROWSER STATE & ACTIONS
+// ============================================================================
+
+export interface BrowserState {
+  url: string;
+  title: string;
+  dom: string;
+  screenshot?: string;
+  viewport: {
+    width: number;
+    height: number;
+    scrollX: number;
+    scrollY: number;
+  };
+  navigation: {
+    canGoBack: boolean;
+    canGoForward: boolean;
+  };
+  performance?: {
+    loadTime: number;
+    domContentLoaded: number;
+    memoryUsage?: number;
+  };
+  timestamp: number;
+}
+
+export interface BrowserAction {
+  type: string;
+  params: Record<string, any>;
   reasoning?: string;
-  done?: boolean;
+  alternatives?: BrowserAction[];
+  riskLevel?: 'low' | 'medium' | 'high';
+  requiresConfirmation?: boolean;
+}
+
+export interface ActionRecord {
+  action: BrowserAction;
+  result: ToolExecutionResult;
+  timestamp: number;
+  duration: number;
+  step: number;
+}
+
+// ============================================================================
+// TASK & SESSION MANAGEMENT
+// ============================================================================
+
+export interface Task {
+  id: string;
+  description: string;
+  status: TaskStatus;
+  priority: number;
+  createdAt: number;
+  startedAt?: number;
+  completedAt?: number;
+  result?: string;
   error?: string;
 }
 
-export interface PlannerOutput {
-  strategy: string;
-  nextSteps: string[];
-  done: boolean;
-  finalAnswer?: string;
-  currentProgress: string;
-}
-
-export interface NavigatorOutput {
-  actions: Action[];
-  done: boolean;
-  reasoning: string;
-}
-
-export interface ExtractorOutput {
-  extractedData: Record<string, unknown>;
-  fields: string[];
+export interface SessionConfig {
+  maxSteps: number;
+  enableVision: boolean;
+  enableReplay: boolean;
+  enableAnalytics: boolean;
+  strictSecurity: boolean;
+  retryStrategy: RetryStrategy;
+  cacheStrategy: CacheStrategy;
+  toolsEnabled: string[];
 }
 
 export interface SessionState {
   sessionId: string;
+  extensionId: string;
+  
+  // Task management
   tasks: Task[];
   currentTaskIndex: number;
-  currentAction: Action | null;
+  stepCount: number;
+  
+  // Execution state
   executionState: ExecutionState;
-  browserState: BrowserState | null;
-  actionHistory: Array<{ action: Action; result: ActionResult }>;
-  plannerHistory: PlannerOutput[];
-  conversationHistory: LLMMessage[];
-  contentCache: Map<string, string>;
+  actionQueue: BrowserAction[];
+  
+  // Strategic planning
+  currentPlan?: StrategicPlan;
+  
+  // History & replay
+  actionHistory: ActionRecord[];
+  plannerHistory: PlannerRecord[];
+  securityEvents: SecurityEvent[];
+  
+  // Browser state
+  browserState: BrowserState;
+  
+  // Performance & caching
+  contentCache: Map<string, CachedContent>;
+  cacheStats: CacheStats;
+  
+  // Configuration
+  config: SessionConfig;
+  
+  // Metrics
+  metrics: SessionMetrics;
+  
+  // Timestamps
   createdAt: number;
   updatedAt: number;
+}
+
+// ============================================================================
+// PLANNING & COORDINATION
+// ============================================================================
+
+export interface StrategicPlan {
+  strategy: string;
+  estimatedSteps: number;
+  confidence: number;
+  
+  plannedActions: Array<{
+    action: BrowserAction;
+    reasoning: string;
+    alternatives?: BrowserAction[];
+    contingency?: string;
+    priority: number;
+  }>;
+  
+  successCriteria: string[];
+  
+  risks: Array<{
+    description: string;
+    likelihood: 'low' | 'medium' | 'high';
+    impact: 'low' | 'medium' | 'high';
+    mitigation: string;
+  }>;
+  
+  createdAt: number;
+  revisedAt?: number;
+  revisionReason?: string;
+}
+
+export interface PlannerInput {
+  taskDescription: string;
+  currentState: BrowserState;
+  actionHistory: ActionRecord[];
+  currentPlan?: StrategicPlan;
   stepCount: number;
-  consecutiveFailures: number;
-  config: ExecutionConfig;
-}
-
-export interface ExecutionConfig {
   maxSteps: number;
-  maxFailures: number;
-  planningInterval: number;
-  useVision: boolean;
-  enableReplay: boolean;
-  maxActionsPerStep: number;
 }
 
-export interface LLMConfig {
-  provider: 'openai' | 'anthropic';
-  model: string;
-  apiKey: string;
-  temperature?: number;
-  maxTokens?: number;
-  supportsVision?: boolean;
+export interface PlannerOutput {
+  plan?: StrategicPlan;
+  nextAction: BrowserAction;
+  reasoning: string;
+  confidence: number;
+  needsRevision: boolean;
+  taskComplete: boolean;
+  result?: string;
 }
 
-export interface LLMMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string | MessageContent[];
+export interface PlannerRecord {
+  input: PlannerInput;
+  output: PlannerOutput;
+  timestamp: number;
+  duration: number;
 }
 
-export type MessageContent = TextContent | ImageContent;
-
-export interface TextContent {
-  type: 'text';
-  text: string;
+export interface ActorInput {
+  action: BrowserAction;
+  browserState: BrowserState;
+  plan?: StrategicPlan;
 }
 
-export interface ImageContent {
-  type: 'image_url';
-  image_url: {
-    url: string;
-    detail?: 'low' | 'high' | 'auto';
-  };
+export interface ActorOutput {
+  success: boolean;
+  result?: any;
+  error?: string;
+  needsRetry: boolean;
+  browserStateChanged: boolean;
+  screenshot?: string;
+  taskComplete: boolean;
+  completionResult?: string;
 }
 
-export interface LLMResponse {
+export interface ExtractorInput {
+  fields: string[];
   content: string;
-  usage?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  };
+  extractionPrompt?: string;
 }
 
-export interface ExecuteTaskRequest {
-  task: string;
-  tabId: number;
-  url: string;
-  apiKey?: string;
-  model?: string;
-  provider?: 'openai' | 'anthropic';
-  config?: Partial<ExecutionConfig>;
+export interface ExtractorOutput {
+  extractedData: Record<string, any>;
+  confidence: number;
+  warnings?: string[];
 }
+
+// ============================================================================
+// CACHING
+// ============================================================================
+
+export interface CacheStrategy {
+  enabled: boolean;
+  maxSize: number;
+  ttl: number;
+  compressionEnabled: boolean;
+  compressionThreshold: number;
+  warmingEnabled: boolean;
+}
+
+export interface CachedContent {
+  content: string;
+  compressed: boolean;
+  timestamp: number;
+  hits: number;
+  size: number;
+}
+
+export interface CacheStats {
+  hits: number;
+  misses: number;
+  evictions: number;
+  totalSize: number;
+  hitRate: number;
+}
+
+// ============================================================================
+// ANALYTICS & METRICS
+// ============================================================================
+
+export interface SessionMetrics {
+  totalSteps: number;
+  successfulActions: number;
+  failedActions: number;
+  retriedActions: number;
+  totalExecutionTime: number;
+  averageStepTime: number;
+  llmCalls: number;
+  llmTokensUsed: number;
+  estimatedCost: number;
+  securityThreatsDetected: number;
+  cacheHitRate: number;
+}
+
+export interface PerformanceMetric {
+  operation: string;
+  duration: number;
+  timestamp: number;
+  metadata?: Record<string, any>;
+}
+
+// ============================================================================
+// EVENTS
+// ============================================================================
 
 export interface EventData {
   type: EventType;
-  actor: string;
+  actor: 'system' | 'planner' | 'actor' | 'user';
   state: string;
-  data?: unknown;
+  data?: any;
   timestamp: number;
+  severity?: 'info' | 'warning' | 'error' | 'critical';
 }
 
-export enum EventType {
-  TASK_START = 'task_start',
-  TASK_OK = 'task_ok',
-  TASK_FAIL = 'task_fail',
-  TASK_CANCEL = 'task_cancel',
-  TASK_PAUSE = 'task_pause',
-  PLAN_START = 'plan_start',
-  PLAN_OK = 'plan_ok',
-  PLAN_FAIL = 'plan_fail',
-  ACT_START = 'act_start',
-  ACT_OK = 'act_ok',
-  ACT_FAIL = 'act_fail',
-  STATE_UPDATE = 'state_update',
-}
+// ============================================================================
+// REPLAY
+// ============================================================================
 
 export interface ReplaySession {
   sessionId: string;
   taskDescription: string;
-  actions: Array<{ action: Action; result: ActionResult }>;
+  actions: ActionRecord[];
+  finalState: BrowserState;
+  metrics: SessionMetrics;
   createdAt: number;
+}
+
+// ============================================================================
+// VALIDATION
+// ============================================================================
+
+export interface ValidationResult {
+  isValid: boolean;
+  errors?: string[];
+  warnings?: string[];
+  threats?: ThreatType[];
+  message?: string;
+}
+
+// ============================================================================
+// API REQUEST/RESPONSE TYPES
+// ============================================================================
+
+export interface CreateSessionRequest {
+  extensionId?: string;
+  config?: Partial<SessionConfig>;
+}
+
+export interface CreateSessionResponse {
+  sessionId: string;
+  durableObjectId: string;
+}
+
+export interface ExecuteTaskRequest {
+  task: string;
+  vision?: boolean;
+  strictSecurity?: boolean;
+}
+
+export interface ExecuteTaskResponse {
+  success: boolean;
+  result?: string;
+  error?: string;
+  metrics?: SessionMetrics;
+}
+
+export interface FollowUpTaskRequest {
+  task: string;
+}
+
+export interface NextActionResponse {
+  action?: BrowserAction;
+  waiting: boolean;
+  taskComplete: boolean;
+  result?: string;
+}
+
+export interface ActionResultRequest {
+  success: boolean;
+  result?: any;
+  error?: string;
+  screenshot?: string;
+}
+
+export interface UpdateStateRequest {
+  url: string;
+  title: string;
+  dom: string;
+  screenshot?: string;
+  viewport: BrowserState['viewport'];
+  navigation: BrowserState['navigation'];
+  performance?: BrowserState['performance'];
+}
+
+export interface ExtractRequest {
+  fields: string[];
+  content: string;
+  extractionPrompt?: string;
+}
+
+export interface ExtractResponse {
+  success: boolean;
+  data?: Record<string, any>;
+  error?: string;
 }
