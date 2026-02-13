@@ -48,8 +48,16 @@ export class SessionDurableObject {
   
   constructor(state: DurableObjectState, env: any) {
     this.state = state;
+    // Don't block on constructor - lazy load state when needed
+  }
+  
+  private async ensureInitialized(env?: any): Promise<void> {
+    // Skip if already initialized or if this is a new session (will be created by /init)
+    if (this.sessionState !== null) {
+      return;
+    }
     
-    this.state.blockConcurrencyWhile(async () => {
+    try {
       const stored = await this.state.storage.get<any>('session');
       if (stored) {
         this.sessionState = {
@@ -57,9 +65,11 @@ export class SessionDurableObject {
           contentCache: new Map(Object.entries(stored.contentCache || {})),
         };
         
-        this.contentCache = new EnhancedContentCache(this.sessionState.config.cacheStrategy);
+        if (this.sessionState.config?.cacheStrategy) {
+          this.contentCache = new EnhancedContentCache(this.sessionState.config.cacheStrategy);
+        }
         
-        if (env.ANTHROPIC_API_KEY) {
+        if (env?.ANTHROPIC_API_KEY && !this.coordinator && this.sessionState) {
           this.coordinator = new EnhancedCoordinator(
             env.ANTHROPIC_API_KEY,
             this.sessionState,
@@ -67,12 +77,18 @@ export class SessionDurableObject {
           );
         }
       }
-    });
+    } catch (error) {
+      console.error('Error loading session state:', error);
+      // Don't throw - let the handler deal with missing state
+    }
   }
   
-  async fetch(request: Request): Promise<Response> {
+  async fetch(request: Request, env?: any): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
+    
+    // Lazy load session state from storage if needed
+    await this.ensureInitialized(env);
     
     try {
       switch (path) {
