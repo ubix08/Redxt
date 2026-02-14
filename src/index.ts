@@ -301,19 +301,16 @@ router.all('*', () => {
 });
 
 // ============================================================================
-// MAIN FETCH HANDLER - THIS WAS MISSING!
+// EXPORT - CRITICAL FOR ITTY-ROUTER V5!
 // ============================================================================
 
+// Option 1: Spread operator (recommended by itty-router docs)
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    try {
-      return await router.handle(request, env, ctx);
-    } catch (error) {
-      console.error('Unhandled error in fetch:', error);
-      return handleError(error);
-    }
-  }
+  ...router
 };
+
+// Option 2: Direct export (alternative that also works)
+// export default router;
 
 // ============================================================================
 // DURABLE OBJECT EXPORT
