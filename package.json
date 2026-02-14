@@ -1,25 +1,15 @@
 {
   "name": "redxt",
-  "version": "1.0.0",
-  "description": "Cloudflare Worker backend for AI agent browser automation",
-  "type": "module",
+  "version": "2.0.0",
+  "description": "Optimized Node-RED for Cloudflare Workers",
+  "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "build": "esbuild src/index.ts --bundle --format=esm --outfile=dist/index.js --platform=neutral --conditions=worker",
-    "tail": "wrangler tail",
-    "test": "vitest",
-    "type-check": "tsc --noEmit"
+    "db:init": "wrangler d1 execute rednox-flows --remote --command 'SELECT 1'",
+    "db:create": "wrangler d1 create rednox-flows"
   },
-  "keywords": [
-    "cloudflare-workers",
-    "durable-objects",
-    "ai-agent",
-    "browser-automation"
-  ],
-  "author": "",
-  "license": "MIT",
-  "devDependencies": {
+    "devDependencies": {
     "@biomejs/biome": "^2.2.5",
     "@cloudflare/vitest-pool-workers": "^0.9.12",
     "@cloudflare/workers-types": "^4.20251008.0",
@@ -30,6 +20,7 @@
     "wrangler": "^4.42.2"
   },
   "dependencies": {
+    "@google/genai": "^1.28.0",
     "itty-router": "^5.0.0",
     "@anthropic-ai/sdk": "^0.20.0"
   }
