@@ -1,5 +1,5 @@
 {
-  "name": "agent-browser",
+  "name": "redxt",
   "version": "1.0.0",
   "description": "Cloudflare Worker backend for AI agent browser automation",
   "type": "module",
