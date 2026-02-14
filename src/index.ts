@@ -284,114 +284,39 @@ router.post('/api/sessions/:sessionId/cancel', async (request: Request, env: Env
 });
 
 // ============================================================================
-// HISTORY & MONITORING
-// ============================================================================
-
-router.get('/api/sessions/:sessionId/history', async (request: Request, env: Env) => {
-  try {
-    const { sessionId } = request.params as { sessionId: string };
-    const id = env.SESSIONS.idFromName(sessionId);
-    const stub = env.SESSIONS.get(id);
-
-    const response = await stub.fetch(
-      new Request('http://internal/history', {
-        method: 'GET',
-      })
-    );
-
-    return new Response(response.body, {
-      status: response.status,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
-    });
-  } catch (error) {
-    return handleError(error);
-  }
-});
-
-router.get('/api/sessions/:sessionId/events', async (request: Request, env: Env) => {
-  try {
-    const { sessionId } = request.params as { sessionId: string };
-    const id = env.SESSIONS.idFromName(sessionId);
-    const stub = env.SESSIONS.get(id);
-
-    const response = await stub.fetch(
-      new Request('http://internal/events', {
-        method: 'GET',
-      })
-    );
-
-    return response; // Return SSE stream directly
-  } catch (error) {
-    return handleError(error);
-  }
-});
-
-// ============================================================================
-// FEATURES
-// ============================================================================
-
-router.post('/api/sessions/:sessionId/replay', async (request: Request, env: Env) => {
-  try {
-    const { sessionId } = request.params as { sessionId: string };
-    const id = env.SESSIONS.idFromName(sessionId);
-    const stub = env.SESSIONS.get(id);
-
-    const response = await stub.fetch(
-      new Request('http://internal/replay', {
-        method: 'POST',
-      })
-    );
-
-    return new Response(response.body, {
-      status: response.status,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
-    });
-  } catch (error) {
-    return handleError(error);
-  }
-});
-
-router.post('/api/sessions/:sessionId/extract', async (request: Request, env: Env) => {
-  try {
-    const { sessionId } = request.params as { sessionId: string };
-    const body = await request.json();
-
-    const id = env.SESSIONS.idFromName(sessionId);
-    const stub = env.SESSIONS.get(id);
-
-    const response = await stub.fetch(
-      new Request('http://internal/extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-    );
-
-    return new Response(response.body, {
-      status: response.status,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
-    });
-  } catch (error) {
-    return handleError(error);
-  }
-});
-
-// ============================================================================
-// FALLBACK
+// CATCH-ALL 404 HANDLER
 // ============================================================================
 
 router.all('*', () => {
-  return new Response('Not Found', { status: 404, headers: corsHeaders });
+  return new Response(
+    JSON.stringify({ 
+      error: 'Not Found',
+      message: 'The requested endpoint does not exist',
+    }),
+    {
+      status: 404,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    }
+  );
 });
 
 // ============================================================================
-// WORKER EXPORT
+// MAIN FETCH HANDLER - THIS WAS MISSING!
 // ============================================================================
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    return router.handle(request, env);
-  },
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    try {
+      return await router.handle(request, env, ctx);
+    } catch (error) {
+      console.error('Unhandled error in fetch:', error);
+      return handleError(error);
+    }
+  }
 };
+
+// ============================================================================
+// DURABLE OBJECT EXPORT
+// ============================================================================
 
 export { SessionDurableObject };
