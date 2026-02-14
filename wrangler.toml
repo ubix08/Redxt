@@ -10,10 +10,6 @@ class_name = "SessionDurableObject"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["SessionDurableObject"]
-
-[build]
-command = "npm run build"
-
 # Increased CPU limit for complex agent operations (5 minutes)
 [durable_objects.limits]
 cpu_ms = 300000
